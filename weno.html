@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weno</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto';
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        header {
+            background-color: #007bff;
+            color: #fff;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        main {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .search-bar,
+        .write-post-container textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: 'Roboto';
+        }
+
+        .post {
+            background-color: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .post-content {
+            margin-bottom: 10px;
+        }
+
+        .post-media {
+            width: 100%;
+            border-radius: 5px;
+        }
+
+        .primary-btn {
+            background-color: #007bff;
+            color: #fff;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 5px;
+        }
+
+        .primary-btn:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Weno</h1>
+    </header>
+
+    <main>
+        <input type="text" id="searchBar" class="search-bar" placeholder="Search posts...">
+
+        <div id="posts">
+            <!-- Posts will be displayed here -->
+        </div>
+
+        <div id="searchResults" class="search-results">
+            <!-- Search results will be displayed here -->
+        </div>
+
+        <!-- Write post container -->
+        <div class="write-post-container">
+            <textarea id="postContent" placeholder="Write your post..." rows="4"></textarea>
+            <form id="postForm">
+                <button type="button" id="uploadMediaBtn" class="primary-btn">Upload Media</button>
+                <input type="file" id="postMedia" accept="image/*, video/*" style="display: none;">
+                <button type="button" id="postBtn" class="primary-btn">Post</button>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const postForm = document.getElementById('postForm');
+            const postContent = document.getElementById('postContent');
+            const postMedia = document.getElementById('postMedia');
+            const postsContainer = document.getElementById('posts');
+            const searchBar = document.getElementById('searchBar');
+            const searchResultsContainer = document.getElementById('searchResults');
+            let allPosts = [];
+
+            document.getElementById('uploadMediaBtn').addEventListener('click', function () {
+                postMedia.click();
+            });
+
+            document.getElementById('postBtn').addEventListener('click', function () {
+                const content = postContent.value.trim();
+                const media = postMedia.files[0];
+                if (content !== '') {
+                    createPost(content, media);
+                    postContent.value = '';
+                    postMedia.value = ''; // Reset the input value after posting
+                    clearMediaPreview(); // Clear media preview after posting
+                }
+            });
+
+            postMedia.addEventListener('change', function () {
+                const selectedFile = postMedia.files[0];
+                if (selectedFile) {
+                    const reader = new FileReader();
+                    reader.onload = function (event) {
+                        const mediaUrl = event.target.result;
+                        createMediaPreview(mediaUrl, selectedFile.type);
+                    };
+                    reader.readAsDataURL(selectedFile);
+                }
+            });
+
+            function createMediaPreview(mediaUrl, mediaType) {
+                const mediaPreview = mediaType.startsWith('image/') ? document.createElement('img') : document.createElement('video');
+                mediaPreview.src = mediaUrl;
+                mediaPreview.classList.add('post-media');
+                mediaPreview.setAttribute('controls', ''); // Add controls for video elements
+                postsContainer.appendChild(mediaPreview);
+            }
+
+            function clearMediaPreview() {
+                const mediaPreview = document.querySelector('.post-media');
+                if (mediaPreview) {
+                    mediaPreview.remove();
+                }
+            }
+
+            function createPost(content, media) {
+                const postDiv = document.createElement('div');
+                postDiv.classList.add('post');
+                const textContent = document.createElement('div');
+                textContent.classList.add('post-content');
+                textContent.textContent = content;
+                postDiv.appendChild(textContent);
+
+                // Display uploaded media
+                if (media) {
+                    const mediaPreview = document.createElement(media.type.startsWith('image/') ? 'img' : 'video');
+                    mediaPreview.classList.add('post-media');
+                    mediaPreview.src = URL.createObjectURL(media);
+                    mediaPreview.setAttribute('controls', ''); // Add controls for video elements
+                    postDiv.appendChild(mediaPreview);
+                }
+
+                // Upvote button
+                const upvoteButton = document.createElement('button');
+                upvoteButton.innerHTML = '&#9650;'; // Unicode for up arrow
+                upvoteButton.classList.add('primary-btn');
+                upvoteButton.addEventListener('click', function() {
+                    upvotePost(postDiv);
+                });
+                postDiv.appendChild(upvoteButton);
+
+                // Downvote button
+                const downvoteButton = document.createElement('button');
+                downvoteButton.innerHTML = '&#9660;'; // Unicode for down arrow
+                downvoteButton.classList.add('primary-btn');
+                downvoteButton.addEventListener('click', function() {
+                    downvotePost(postDiv);
+                });
+                postDiv.appendChild(downvoteButton);
+
+                // Votes count
+                const votesCount = document.createElement('span');
+                votesCount.textContent = '0';
+                postDiv.appendChild(votesCount);
+
+                // Comment form
+                const commentForm = document.createElement('form');
+                commentForm.classList.add('comment-form');
+                const commentInput = document.createElement('input');
+                commentInput.type = 'text';
+                commentInput.placeholder = 'Add a comment...';
+                const commentSubmitBtn = document.createElement('button');
+                commentSubmitBtn.type = 'submit';
+                commentSubmitBtn.textContent = 'Comment';
+                commentSubmitBtn.classList.add('primary-btn');
+                commentForm.appendChild(commentInput);
+                commentForm.appendChild(commentSubmitBtn);
+                commentForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const commentContent = commentInput.value.trim();
+                    if (commentContent !== '') {
+                        addComment(postDiv, commentContent);
+                        commentInput.value = '';
+                    }
+                });
+                postDiv.appendChild(commentForm);
+
+                // Add the post to the posts container
+                postsContainer.prepend(postDiv);
+                allPosts.push(postDiv); // Add the new post to the array
+                filterPosts(searchBar.value.trim()); // Apply filtering based on search term
+            }
+
+            function addComment(postDiv, commentContent) {
+                const commentList = document.createElement('ul');
+                commentList.classList.add('comment-list');
+                const commentItem = document.createElement('li');
+                commentItem.textContent = commentContent;
+                commentList.appendChild(commentItem);
+                postDiv.appendChild(commentList);
+            }
+
+            function upvotePost(postDiv) {
+                const votesCount = postDiv.querySelector('span');
+                let count = parseInt(votesCount.textContent);
+                count++;
+                votesCount.textContent = count;
+            }
+
+            function downvotePost(postDiv) {
+                const votesCount = postDiv.querySelector('span');
+                let count = parseInt(votesCount.textContent);
+                count--;
+                votesCount.textContent = count;
+            }
+
+            function filterPosts(searchTerm) {
+                const filteredPosts = allPosts.filter(post => {
+                    const textContent = post.querySelector('.post-content').textContent.toLowerCase();
+                    return textContent.includes(searchTerm.toLowerCase());
+                });
+                displayFilteredPosts(filteredPosts);
+            }
+
+            function displayFilteredPosts(posts) {
+                postsContainer.innerHTML = '';
+                posts.forEach(post => {
+                    postsContainer.appendChild(post);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
